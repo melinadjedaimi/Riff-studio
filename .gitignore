@@ -3,3 +3,4 @@ dist
 .env
 backup.dump
 *.log
+compose.override.yaml
