@@ -2,7 +2,7 @@ import { assertMemberUnderLimit, assertNoOverlap, cancellationStatus, type Booki
 import type { Clock } from '../domain/clock';
 import { BookingNotFound, MemberNotFound, RoomNotFound } from '../domain/errors';
 import type { Repositories, UnitOfWork } from '../domain/ports';
-import { assertOutsideMaintenance } from '../domain/room';
+import { assertOutsideMaintenance, type Room } from '../domain/room';
 import { validateSlot } from '../domain/slot';
 
 export interface CreateBookingInput {
@@ -67,5 +67,28 @@ export class BookingService {
       await bookings.updateStatus(id, status, clock.now());
       return { ...booking, status };
     });
+  }
+
+  listRooms(): Promise<Room[]> {
+    return this.deps.reads.rooms.list();
+  }
+
+  async getBooking(id: string): Promise<Booking> {
+    const booking = await this.deps.reads.bookings.findById(id);
+    if (!booking) throw new BookingNotFound(id);
+    return booking;
+  }
+
+  async listMemberBookings(memberId: string): Promise<Booking[]> {
+    const { members, bookings } = this.deps.reads;
+    if (!(await members.findById(memberId))) throw new MemberNotFound(memberId);
+    return bookings.listByMember(memberId);
+  }
+
+  /** Planning d'une salle : réservations confirmées qui rencontrent [from, to), triées par début. */
+  async getRoomPlanning(roomId: string, from: Date, to: Date): Promise<Booking[]> {
+    const { rooms, bookings } = this.deps.reads;
+    if (!(await rooms.findById(roomId))) throw new RoomNotFound(roomId);
+    return bookings.listConfirmedInRange(roomId, from, to);
   }
 }
