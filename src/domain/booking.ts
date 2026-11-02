@@ -1,5 +1,5 @@
 import type { Clock } from './clock';
-import { MemberLimitReached, SlotOverlap } from './errors';
+import { AlreadyCancelled, MemberLimitReached, SlotOverlap } from './errors';
 import { overlaps, type Slot } from './slot';
 
 export type BookingStatus = 'confirmed' | 'cancelled' | 'late_cancelled';
@@ -36,4 +36,17 @@ export function assertMemberUnderLimit(memberBookings: Booking[], clock: Clock):
   if (countUpcoming(memberBookings, clock) >= MAX_UPCOMING_BOOKINGS) {
     throw new MemberLimitReached(MAX_UPCOMING_BOOKINGS);
   }
+}
+
+export const LATE_CANCELLATION_HOURS = 24;
+
+/**
+ * Règle 4 : statut résultant de l'annulation.
+ * `late_cancelled` si elle a lieu à moins de 24 h du début (strictement), sinon `cancelled`.
+ * Une réservation déjà annulée ne peut pas l'être une seconde fois.
+ */
+export function cancellationStatus(booking: Booking, clock: Clock): 'cancelled' | 'late_cancelled' {
+  if (booking.status !== 'confirmed') throw new AlreadyCancelled(booking.id);
+  const msBeforeStart = booking.start.getTime() - clock.now().getTime();
+  return msBeforeStart < LATE_CANCELLATION_HOURS * 3_600_000 ? 'late_cancelled' : 'cancelled';
 }

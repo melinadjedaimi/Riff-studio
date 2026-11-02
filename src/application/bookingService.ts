@@ -1,6 +1,6 @@
-import { assertMemberUnderLimit, assertNoOverlap, type Booking } from '../domain/booking';
+import { assertMemberUnderLimit, assertNoOverlap, cancellationStatus, type Booking } from '../domain/booking';
 import type { Clock } from '../domain/clock';
-import { MemberNotFound, RoomNotFound } from '../domain/errors';
+import { BookingNotFound, MemberNotFound, RoomNotFound } from '../domain/errors';
 import type { Repositories, UnitOfWork } from '../domain/ports';
 import { validateSlot } from '../domain/slot';
 
@@ -49,6 +49,20 @@ export class BookingService {
       };
       await bookings.insert(booking);
       return booking;
+    });
+  }
+
+  async cancelBooking(id: string): Promise<Booking> {
+    const { uow, clock } = this.deps;
+
+    return uow.run(async ({ bookings }) => {
+      // Verrou de ligne : deux annulations simultanées de la même réservation sont sérialisées.
+      const booking = await bookings.findByIdForUpdate(id);
+      if (!booking) throw new BookingNotFound(id);
+
+      const status = cancellationStatus(booking, clock);
+      await bookings.updateStatus(id, status, clock.now());
+      return { ...booking, status };
     });
   }
 }
