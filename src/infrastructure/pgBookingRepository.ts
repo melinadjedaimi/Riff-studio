@@ -2,7 +2,6 @@ import type { Pool, PoolClient } from 'pg';
 import type { Booking, BookingStatus } from '../domain/booking';
 import { SlotOverlap } from '../domain/errors';
 import type { BookingRepository } from '../domain/ports';
-import type { Slot } from '../domain/slot';
 
 export type Queryable = Pick<Pool | PoolClient, 'query'>;
 
@@ -61,10 +60,6 @@ export class PgBookingRepository implements BookingRepository {
       [roomId, from, to],
     );
     return rows.map(toBooking);
-  }
-
-  async findConfirmedOverlapping(roomId: string, slot: Slot): Promise<Booking[]> {
-    return this.listConfirmedInRange(roomId, slot.start, slot.end);
   }
 
   async insert(booking: Booking): Promise<void> {

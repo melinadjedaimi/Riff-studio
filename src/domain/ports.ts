@@ -1,6 +1,5 @@
 import type { Booking, BookingStatus } from './booking';
 import type { Member, Room } from './room';
-import type { Slot } from './slot';
 
 /** Ports : décrits par le domaine, implémentés par l'infrastructure. */
 
@@ -22,8 +21,6 @@ export interface BookingRepository {
   listByMember(memberId: string): Promise<Booking[]>;
   /** Confirmées dans [from, to), triées par début. */
   listConfirmedInRange(roomId: string, from: Date, to: Date): Promise<Booking[]>;
-  /** Confirmées qui chevauchent le créneau. */
-  findConfirmedOverlapping(roomId: string, slot: Slot): Promise<Booking[]>;
   /** Lève SlotOverlap si la contrainte d'exclusion refuse. */
   insert(booking: Booking): Promise<void>;
   updateStatus(id: string, status: BookingStatus, at: Date): Promise<void>;

@@ -29,7 +29,7 @@ export class BookingService {
     const { uow, clock, newId, cache } = this.deps;
     const slot = validateSlot(input.start, input.end);
 
-    const booking = await uow.run(async ({ rooms, members, bookings }) => {
+    const created = await uow.run(async ({ rooms, members, bookings }) => {
       const room = await rooms.findById(input.roomId);
       if (!room) throw new RoomNotFound(input.roomId);
 
@@ -40,7 +40,7 @@ export class BookingService {
       if (!member) throw new MemberNotFound(input.memberId);
 
       assertMemberUnderLimit(await bookings.listByMember(member.id), clock);
-      assertNoOverlap(slot, await bookings.findConfirmedOverlapping(room.id, slot));
+      assertNoOverlap(slot, await bookings.listConfirmedInRange(room.id, slot.start, slot.end));
 
       const booking: Booking = {
         id: newId(),
@@ -54,8 +54,8 @@ export class BookingService {
       return booking;
     });
     // Après le COMMIT, pour que le planning soit à jour tout de suite.
-    await cache.invalidateRoom(booking.roomId);
-    return booking;
+    await cache.invalidateRoom(created.roomId);
+    return created;
   }
 
   async cancelBooking(id: string): Promise<Booking> {

@@ -10,26 +10,15 @@ export const PLANNING_TTL_SECONDS = 300;
 
 type Warn = (message: string, err: unknown) => void;
 
-interface CachedBooking {
-  id: string;
-  roomId: string;
-  memberId: string;
-  start: string;
-  end: string;
-  status: Booking['status'];
-}
-
 const versionKey = (roomId: string) => `planning:${roomId}:version`;
 
-const serialize = (bookings: Booking[]): string =>
-  JSON.stringify(
-    bookings.map(
-      (b): CachedBooking => ({ ...b, start: b.start.toISOString(), end: b.end.toISOString() }),
-    ),
-  );
-
+/** JSON.stringify écrit les dates en ISO ; on les reconvertit à la lecture. */
 const parse = (raw: string): Booking[] =>
-  (JSON.parse(raw) as CachedBooking[]).map((b) => ({ ...b, start: new Date(b.start), end: new Date(b.end) }));
+  (JSON.parse(raw) as Array<Omit<Booking, 'start' | 'end'> & { start: string; end: string }>).map((b) => ({
+    ...b,
+    start: new Date(b.start),
+    end: new Date(b.end),
+  }));
 
 /** Client qui échoue vite : pas de file d'attente hors ligne, timeouts courts. */
 export function createValkeyClient(url: string, warn: Warn): Redis {
@@ -78,7 +67,7 @@ export class ValkeyPlanningCache implements PlanningCache {
 
     if (key) {
       try {
-        await this.redis.set(key, serialize(bookings), 'EX', this.ttlSeconds);
+        await this.redis.set(key, JSON.stringify(bookings), 'EX', this.ttlSeconds);
       } catch (err) {
         this.warn('Écriture du cache impossible', err);
       }
@@ -96,8 +85,11 @@ export class ValkeyPlanningCache implements PlanningCache {
   }
 
   private purgeIfNeeded(): Promise<void> {
+    // Une purge en cours : les autres lectures l'attendent au lieu de lire des entrées périmées.
+    if (this.purging) return this.purging;
     if (!this.needsPurge) return Promise.resolve();
-    this.purging ??= this.deleteEntries()
+    this.needsPurge = false;
+    this.purging = this.deleteEntries()
       .catch((err: unknown) => {
         this.needsPurge = true;
         throw err;
@@ -110,7 +102,6 @@ export class ValkeyPlanningCache implements PlanningCache {
 
   /** Supprime les entrées, pas les compteurs de version. */
   private async deleteEntries(): Promise<void> {
-    this.needsPurge = false;
     let cursor = '0';
     do {
       const [next, keys] = await this.redis.scan(cursor, 'MATCH', 'planning:*:v*:*', 'COUNT', 200);
