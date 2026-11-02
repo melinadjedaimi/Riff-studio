@@ -2,6 +2,7 @@ import { assertMemberUnderLimit, assertNoOverlap, cancellationStatus, type Booki
 import type { Clock } from '../domain/clock';
 import { BookingNotFound, MemberNotFound, RoomNotFound } from '../domain/errors';
 import type { Repositories, UnitOfWork } from '../domain/ports';
+import { assertOutsideMaintenance } from '../domain/room';
 import { validateSlot } from '../domain/slot';
 
 export interface CreateBookingInput {
@@ -30,6 +31,8 @@ export class BookingService {
     return uow.run(async ({ rooms, members, bookings }) => {
       const room = await rooms.findById(input.roomId);
       if (!room) throw new RoomNotFound(input.roomId);
+
+      assertOutsideMaintenance(slot, room);
 
       // Verrou sur le membre : sérialise ses créations simultanées, sinon la limite de 2
       // se lit « 1 à venir » dans deux transactions à la fois.
