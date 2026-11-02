@@ -2,7 +2,7 @@ import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
 import { DomainError } from '../domain/errors';
 
-/** Seul endroit où les erreurs du domaine deviennent des codes HTTP. */
+/** Erreurs du domaine → codes HTTP. */
 const STATUS_BY_CODE: Record<string, number> = {
   invalid_slot: 400,
   room_not_found: 404,
@@ -30,7 +30,7 @@ export function errorHandler(err: FastifyError | Error, req: FastifyRequest, rep
     reply.code(400).send({ error: 'invalid_request', message } satisfies ErrorBody);
     return;
   }
-  // Erreurs de Fastify elles-mêmes (JSON malformé, etc.) : 4xx portées par statusCode.
+  // Erreurs 4xx de Fastify (JSON malformé, etc.).
   const statusCode = (err as FastifyError).statusCode;
   if (statusCode && statusCode >= 400 && statusCode < 500) {
     reply.code(statusCode).send({ error: 'bad_request', message: err.message } satisfies ErrorBody);

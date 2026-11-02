@@ -7,7 +7,7 @@ import { NoPlanningCache } from './infrastructure/noPlanningCache';
 import { createRepositories, PgUnitOfWork } from './infrastructure/pgRepositories';
 import { createValkeyClient, ValkeyPlanningCache } from './infrastructure/valkeyPlanningCache';
 
-/** Point de composition : seul endroit qui connaît toutes les couches et lit l'heure réelle. */
+/** Composition des couches, avec l'horloge réelle. */
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('DATABASE_URL manquante (copiez .env.example vers .env)');
 

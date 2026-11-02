@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 
-/** Données de départ de l'énoncé. Idempotent : peut être rejoué sur une base déjà remplie. */
+/** Données de départ de l'énoncé (peut être rejoué). */
 export async function seed(pool: Pool): Promise<void> {
   const client = await pool.connect();
   try {

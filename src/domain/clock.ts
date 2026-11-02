@@ -1,4 +1,4 @@
-/** L'heure est une dépendance : les règles la reçoivent, elles n'appellent jamais Date.now(). */
+/** Les règles reçoivent l'horloge, elles n'appellent jamais Date.now(). */
 export interface Clock {
   now(): Date;
 }

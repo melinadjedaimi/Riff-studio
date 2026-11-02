@@ -78,7 +78,7 @@ export class PgBookingRepository implements BookingRepository {
         booking.status,
       ]);
     } catch (err) {
-      // Second rempart : la contrainte d'exclusion tranche les requêtes simultanées.
+      // La contrainte d'exclusion tranche les requêtes simultanées.
       if ((err as { code?: string }).code === EXCLUSION_VIOLATION) throw new SlotOverlap();
       throw err;
     }

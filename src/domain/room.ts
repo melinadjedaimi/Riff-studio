@@ -5,7 +5,7 @@ export interface Room {
   id: string;
   name: string;
   capacity: number;
-  /** Période pendant laquelle la salle refuse toute réservation. */
+  /** Période de maintenance. */
   maintenance: Slot | null;
 }
 
@@ -14,11 +14,7 @@ export interface Member {
   name: string;
 }
 
-/**
- * Règle 5 : une salle en maintenance refuse tout créneau qui empiète sur la période.
- * Intervalles semi-ouverts : finir à l'instant où la maintenance commence, ou commencer
- * à l'instant où elle se termine, n'empiète pas.
- */
+/** Règle 5 : refuse un créneau qui empiète sur la maintenance (bornes [début, fin)). */
 export function assertOutsideMaintenance(slot: Slot, room: Room): void {
   if (room.maintenance && overlaps(slot, room.maintenance)) throw new RoomUnderMaintenance();
 }

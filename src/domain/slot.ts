@@ -13,10 +13,7 @@ export interface Slot {
   end: Date;
 }
 
-/**
- * Règle 1 : durée de 1 h à 4 h, début et fin à une heure pleine (UTC),
- * le créneau tient dans la plage 10 h – 23 h du même jour.
- */
+/** Règle 1 : 1 à 4 h, heures pleines, dans la plage 10 h – 23 h (UTC). */
 export function validateSlot(start: Date, end: Date): Slot {
   const startMs = start.getTime();
   const endMs = end.getTime();
@@ -39,7 +36,7 @@ export function validateSlot(start: Date, end: Date): Slot {
   return { start, end };
 }
 
-/** Intervalles semi-ouverts [start, end) : finir à l'heure où l'autre commence n'est pas un chevauchement. */
+/** Intervalles [start, end) : bout à bout = pas de chevauchement. */
 export function overlaps(a: Slot, b: Slot): boolean {
   return a.start < b.end && b.start < a.end;
 }

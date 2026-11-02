@@ -14,14 +14,14 @@ export interface CreateBookingInput {
 
 export interface BookingServiceDeps {
   uow: UnitOfWork;
-  /** Accès en lecture, hors transaction. */
+  /** Lectures hors transaction. */
   reads: Repositories;
   clock: Clock;
   cache: PlanningCache;
   newId: () => string;
 }
 
-/** Cas d'usage : orchestre les règles du domaine, ne contient aucune règle lui-même. */
+/** Cas d'usage : enchaîne les règles du domaine. */
 export class BookingService {
   constructor(private readonly deps: BookingServiceDeps) {}
 
@@ -35,8 +35,7 @@ export class BookingService {
 
       assertOutsideMaintenance(slot, room);
 
-      // Verrou sur le membre : sérialise ses créations simultanées, sinon la limite de 2
-      // se lit « 1 à venir » dans deux transactions à la fois.
+      // Verrou sur le membre : sérialise ses créations simultanées (limite de 2).
       const member = await members.findByIdForUpdate(input.memberId);
       if (!member) throw new MemberNotFound(input.memberId);
 
@@ -54,7 +53,7 @@ export class BookingService {
       await bookings.insert(booking);
       return booking;
     });
-    // Après le COMMIT : le planning de la salle doit afficher la nouvelle réservation tout de suite.
+    // Après le COMMIT, pour que le planning soit à jour tout de suite.
     await cache.invalidateRoom(booking.roomId);
     return booking;
   }
@@ -63,7 +62,7 @@ export class BookingService {
     const { uow, clock, cache } = this.deps;
 
     const cancelled = await uow.run(async ({ bookings }) => {
-      // Verrou de ligne : deux annulations simultanées de la même réservation sont sérialisées.
+      // Verrou : deux annulations simultanées sont sérialisées.
       const booking = await bookings.findByIdForUpdate(id);
       if (!booking) throw new BookingNotFound(id);
 
@@ -91,7 +90,7 @@ export class BookingService {
     return bookings.listByMember(memberId);
   }
 
-  /** Planning d'une salle : réservations confirmées qui rencontrent [from, to), triées par début. */
+  /** Réservations confirmées de la salle dans [from, to), triées par début. */
   async getRoomPlanning(roomId: string, from: Date, to: Date): Promise<Booking[]> {
     const { rooms, bookings } = this.deps.reads;
     return this.deps.cache.remember(roomId, from, to, async () => {

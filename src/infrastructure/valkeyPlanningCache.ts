@@ -3,21 +3,8 @@ import type { Booking } from '../domain/booking';
 import type { PlanningCache } from '../domain/ports';
 
 /**
- * Cache du planning d'une salle (GET /rooms/:id/bookings), cache-aside dans Valkey.
- *
- * Clés :
- *   planning:{roomId}:version                       compteur entier, sans expiration
- *   planning:{roomId}:v{version}:{from}:{to}        réponse JSON, TTL 300 s
- *
- * Invalidation : INCR du compteur de la salle. Toutes les clés construites avec l'ancienne version
- * deviennent inatteignables d'un coup, sans SCAN ni KEYS ; elles expirent seules après le TTL.
- * La version est lue avant la lecture PostgreSQL : si une réservation est validée entre-temps,
- * le résultat périmé est rangé sous l'ancienne version, que plus personne ne lit.
- *
- * Valkey indisponible : l'INCR échoue et les entrées existantes restent valides aux yeux de Valkey, qui les
- * rendrait périmées à son retour. Un échec d'invalidation marque donc le cache « à purger » : la prochaine
- * lecture supprime toutes les entrées (jamais les compteurs) avant de s'en servir, et contourne le cache tant
- * que la purge échoue. Même marque au démarrage : l'API a pu être arrêtée pendant un échec.
+ * Cache du planning. Clés : planning:{salle}:version (compteur) et planning:{salle}:v{n}:{from}:{to} (TTL 300 s).
+ * Invalider = INCR du compteur. Si l'INCR échoue (Valkey arrêté), on purge les entrées à la prochaine lecture.
  */
 export const PLANNING_TTL_SECONDS = 300;
 
@@ -44,11 +31,7 @@ const serialize = (bookings: Booking[]): string =>
 const parse = (raw: string): Booking[] =>
   (JSON.parse(raw) as CachedBooking[]).map((b) => ({ ...b, start: new Date(b.start), end: new Date(b.end) }));
 
-/**
- * Client à échecs rapides : pas de file d'attente hors ligne, timeouts courts.
- * Valkey arrêté => erreur immédiate, que le cache attrape pour répondre depuis PostgreSQL.
- * La connexion se fait en arrière-plan : démarrer l'API ne dépend pas de Valkey.
- */
+/** Client qui échoue vite : pas de file d'attente hors ligne, timeouts courts. */
 export function createValkeyClient(url: string, warn: Warn): Redis {
   const client = new Redis(url, {
     connectTimeout: 500,
@@ -125,7 +108,7 @@ export class ValkeyPlanningCache implements PlanningCache {
     return this.purging;
   }
 
-  /** Supprime les entrées de planning (planning:{salle}:v{n}:{from}:{to}), pas les compteurs de version. */
+  /** Supprime les entrées, pas les compteurs de version. */
   private async deleteEntries(): Promise<void> {
     this.needsPurge = false;
     let cursor = '0';

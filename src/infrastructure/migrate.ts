@@ -4,7 +4,7 @@ import type { Pool } from 'pg';
 
 const MIGRATIONS_DIR = join(import.meta.dirname, '..', '..', 'migrations');
 
-/** Applique, dans l'ordre, les fichiers .sql pas encore enregistrés. Retourne les noms appliqués. */
+/** Applique les migrations .sql pas encore appliquées. */
 export async function migrate(pool: Pool): Promise<string[]> {
   await pool.query(
     `CREATE TABLE IF NOT EXISTS schema_migrations (

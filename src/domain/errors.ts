@@ -1,4 +1,4 @@
-/** Erreurs métier typées. La couche HTTP les traduit en codes de statut, jamais le domaine. */
+/** Erreurs métier. Elles sont traduites en codes HTTP dans src/http. */
 export abstract class DomainError extends Error {
   abstract readonly code: string;
 }

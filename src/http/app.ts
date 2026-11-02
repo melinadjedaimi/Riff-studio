@@ -17,7 +17,7 @@ const planningQuery = z
   .object({ from: isoDate, to: isoDate })
   .refine((q) => new Date(q.from) < new Date(q.to), { message: 'from doit précéder to' });
 
-/** 2026-11-04T14:00:00.000Z → 2026-11-04T14:00:00Z, comme dans le contrat. */
+/** Retire les millisecondes (…:00.000Z → …:00Z), comme dans le contrat. */
 const toIso = (d: Date) => d.toISOString().replace('.000Z', 'Z');
 
 function bookingDto(b: Booking) {
@@ -40,7 +40,7 @@ function roomDto(r: Room) {
   };
 }
 
-/** Les handlers valident l'entrée, appellent un cas d'usage et formatent la réponse. Rien d'autre. */
+/** Les handlers valident, appellent un cas d'usage et formatent la réponse. */
 export function buildApp(service: BookingService, opts: { logger?: boolean } = {}): FastifyInstance {
   const app = Fastify({ logger: opts.logger ?? false });
 
