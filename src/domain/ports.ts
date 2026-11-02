@@ -39,3 +39,13 @@ export interface UnitOfWork {
   /** Exécute fn dans une transaction : validée si fn réussit, annulée si elle lève. */
   run<T>(fn: (repos: Repositories) => Promise<T>): Promise<T>;
 }
+
+export interface PlanningCache {
+  /**
+   * Renvoie le planning en cache, sinon le charge avec `load` et le met en cache.
+   * Ne lève jamais d'erreur à cause du cache : s'il est indisponible, `load` répond.
+   */
+  remember(roomId: string, from: Date, to: Date, load: () => Promise<Booking[]>): Promise<Booking[]>;
+  /** À appeler après la validation d'une transaction qui change le planning de la salle. */
+  invalidateRoom(roomId: string): Promise<void>;
+}

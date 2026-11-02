@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BookingService } from '../../src/application/bookingService';
 import { FixedClock } from '../../src/domain/clock';
 import { buildApp } from '../../src/http/app';
+import { NoPlanningCache } from '../../src/infrastructure/noPlanningCache';
 import { createRepositories, PgUnitOfWork } from '../../src/infrastructure/pgRepositories';
 import { createTestPool, resetToSeed } from '../helpers/db';
 
@@ -21,6 +22,7 @@ beforeAll(async () => {
     new BookingService({
       uow: new PgUnitOfWork(pool),
       reads: createRepositories(pool),
+      cache: new NoPlanningCache(),
       // Horloge de l'énoncé : lundi 2 novembre 2026, 9 h UTC.
       clock: new FixedClock(new Date('2026-11-02T09:00:00Z')),
       newId: randomUUID,

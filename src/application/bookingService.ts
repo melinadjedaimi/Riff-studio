@@ -1,7 +1,7 @@
 import { assertMemberUnderLimit, assertNoOverlap, cancellationStatus, type Booking } from '../domain/booking';
 import type { Clock } from '../domain/clock';
 import { BookingNotFound, MemberNotFound, RoomNotFound } from '../domain/errors';
-import type { Repositories, UnitOfWork } from '../domain/ports';
+import type { PlanningCache, Repositories, UnitOfWork } from '../domain/ports';
 import { assertOutsideMaintenance, type Room } from '../domain/room';
 import { validateSlot } from '../domain/slot';
 
@@ -17,6 +17,7 @@ export interface BookingServiceDeps {
   /** Accès en lecture, hors transaction. */
   reads: Repositories;
   clock: Clock;
+  cache: PlanningCache;
   newId: () => string;
 }
 
@@ -25,10 +26,10 @@ export class BookingService {
   constructor(private readonly deps: BookingServiceDeps) {}
 
   async createBooking(input: CreateBookingInput): Promise<Booking> {
-    const { uow, clock, newId } = this.deps;
+    const { uow, clock, newId, cache } = this.deps;
     const slot = validateSlot(input.start, input.end);
 
-    return uow.run(async ({ rooms, members, bookings }) => {
+    const booking = await uow.run(async ({ rooms, members, bookings }) => {
       const room = await rooms.findById(input.roomId);
       if (!room) throw new RoomNotFound(input.roomId);
 
@@ -53,12 +54,15 @@ export class BookingService {
       await bookings.insert(booking);
       return booking;
     });
+    // Après le COMMIT : le planning de la salle doit afficher la nouvelle réservation tout de suite.
+    await cache.invalidateRoom(booking.roomId);
+    return booking;
   }
 
   async cancelBooking(id: string): Promise<Booking> {
-    const { uow, clock } = this.deps;
+    const { uow, clock, cache } = this.deps;
 
-    return uow.run(async ({ bookings }) => {
+    const cancelled = await uow.run(async ({ bookings }) => {
       // Verrou de ligne : deux annulations simultanées de la même réservation sont sérialisées.
       const booking = await bookings.findByIdForUpdate(id);
       if (!booking) throw new BookingNotFound(id);
@@ -67,6 +71,8 @@ export class BookingService {
       await bookings.updateStatus(id, status, clock.now());
       return { ...booking, status };
     });
+    await cache.invalidateRoom(cancelled.roomId);
+    return cancelled;
   }
 
   listRooms(): Promise<Room[]> {
@@ -88,7 +94,9 @@ export class BookingService {
   /** Planning d'une salle : réservations confirmées qui rencontrent [from, to), triées par début. */
   async getRoomPlanning(roomId: string, from: Date, to: Date): Promise<Booking[]> {
     const { rooms, bookings } = this.deps.reads;
-    if (!(await rooms.findById(roomId))) throw new RoomNotFound(roomId);
-    return bookings.listConfirmedInRange(roomId, from, to);
+    return this.deps.cache.remember(roomId, from, to, async () => {
+      if (!(await rooms.findById(roomId))) throw new RoomNotFound(roomId);
+      return bookings.listConfirmedInRange(roomId, from, to);
+    });
   }
 }

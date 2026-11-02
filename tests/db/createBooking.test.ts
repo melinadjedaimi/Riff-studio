@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BookingService } from '../../src/application/bookingService';
 import { FixedClock } from '../../src/domain/clock';
 import { MemberLimitReached } from '../../src/domain/errors';
+import { NoPlanningCache } from '../../src/infrastructure/noPlanningCache';
 import { createRepositories, PgUnitOfWork } from '../../src/infrastructure/pgRepositories';
 import { createTestPool, resetToSeed } from '../helpers/db';
 
@@ -22,6 +23,7 @@ beforeAll(() => {
   service = new BookingService({
     uow: new PgUnitOfWork(pool),
     reads: createRepositories(pool),
+    cache: new NoPlanningCache(),
     clock: new FixedClock(new Date('2026-11-02T09:00:00Z')),
     newId: randomUUID,
   });
