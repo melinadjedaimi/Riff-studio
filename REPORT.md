@@ -208,3 +208,71 @@ L'API répond en 200/204 sans erreur 500 pendant l'arrêt, avec un surcoût d'en
 pas une nécessité. Il apporte un peu de marge lors des pics du soir. Son coût (une brique de plus à opérer,
 une invalidation à garder juste, un défaut réel trouvé ci-dessus) se justifie par l'exercice plus que par le besoin réel : l'API fonctionne identiquement sans lui,
 ce que garantit le repli sur PostgreSQL. Ne pas faire de Valkey la source de vérité garde le système simple à sauvegarder (une seule base à restaurer, voir section 4).
+
+## 4. Sauvegarde et restauration
+
+### Scripts
+
+- `backup.sh` (`npm run backup`) : `pg_dump -Fc` de la base, via le conteneur, dans `backup.dump`. Le dump est écrit dans un fichier temporaire puis renommé : un échec ne détruit pas la sauvegarde précédente.
+- `restore.sh` (`npm run restore`) : supprime puis recrée une **nouvelle** base `studio_riff_restore` (`dropdb` / `createdb`), y restaure avec `pg_restore`, puis compare le nombre de lignes des tables `rooms`, `members`, `bookings` dans les deux bases. Le script refuse de cibler la base d'origine et sort en erreur si un écart apparaît.
+
+### Preuve
+
+Exécuté sur la base de développement contenant les 100 004 réservations de la section 1 (4 de départ + 100 000 générées) :
+
+```
+$ npm run backup
+Sauvegarde de studio_riff écrite dans backup.dump (547173 octets)
+real 0m1.419s
+
+$ npm run restore
+Création de la base studio_riff_restore (supprimée d'abord si elle existe)
+NOTICE:  database "studio_riff_restore" does not exist, skipping
+Restauration de backup.dump dans studio_riff_restore
+
+table       studio_riff studio_riff_restore  résultat
+rooms                 4            4  identique
+members               3            3  identique
+bookings         100004       100004  identique
+Restauration vérifiée : les nombres de lignes concordent.
+real 0m10.705s
+```
+
+Le schéma est restauré avec ses garde-fous : contraintes et index de `bookings` dans la base restaurée.
+
+```
+         conname          | contype
+--------------------------+---------
+ bookings_end_after_start | c
+ bookings_member_id_fkey  | f
+ bookings_no_overlap      | x        <- contrainte d'exclusion
+ bookings_pkey            | p
+ bookings_room_id_fkey    | f
+ bookings_status_valid    | c
+
+      indexname
+---------------------
+ bookings_member
+ bookings_no_overlap
+ bookings_pkey
+ bookings_room_start
+```
+
+Le script est rejouable (la base restaurée est recréée à chaque exécution) ; avec la base d'origine en cible, il refuse :
+`Refus : la restauration ne doit pas écraser la base d'origine (studio_riff).`
+
+### RPO, RTO, rétention
+
+| Objectif | Valeur | Justification |
+|---|---|---|
+| **RPO** (perte de données tolérée) | **24 h** : une sauvegarde par nuit (par exemple 3 h UTC, quand les salles sont fermées) | Une association ne perd pas d'argent à la minute. Dans le pire cas on perd les réservations d'une journée, que les membres savent refaire (quelques réservations par jour, les groupes ont leurs confirmations). Passer sous l'heure demanderait l'archivage des journaux (WAL) et des compétences d'exploitation qu'une association de bénévoles n'a pas. |
+| **RTO** (durée d'indisponibilité tolérée) | **4 h** | La restauration technique prend une dizaine de secondes (10,7 s pour 100 000 réservations, bien plus que la réalité) ; le temps dominant est humain : prévenir le bénévole, relancer `docker compose up` et `npm run restore`. 4 h couvrent une indisponibilité en journée sans astreinte de nuit ; on ne réserve pas une salle en pleine nuit. Pendant l'incident, un message aux membres suffit. |
+| **Rétention** | **30 sauvegardes quotidiennes + 12 mensuelles** (la première de chaque mois, 1 an) | Les 30 jours couvrent une erreur découverte tardivement (par exemple un lot de réservations annulées par erreur) ; les mensuelles couvrent une saison. Au-delà d'un an, garder des noms de membres sans nécessité est inutile (minimisation des données personnelles). Le volume est négligeable : ~0,5 Mo pour 100 000 réservations, soit moins de 100 Mo au total. |
+
+Règles associées :
+
+- Copier `backup.dump` **hors de la machine** qui héberge la base (autre disque ou stockage en ligne chiffré) : une sauvegarde sur le même disque ne protège pas d'une panne du disque.
+- Tester une restauration tous les trimestres avec `./restore.sh`.
+- Valkey n'est pas sauvegardé : il ne contient que des copies recalculables (section 2), la perte du cache est sans conséquence.
+
+Une banque viserait un RPO proche de zéro (réplication synchrone, journaux WAL), un RTO de quelques minutes (réplica de secours) et des rétentions légales de plusieurs années : coûteux et inutile ici.
