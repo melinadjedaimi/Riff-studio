@@ -38,3 +38,8 @@ export function validateSlot(start: Date, end: Date): Slot {
   }
   return { start, end };
 }
+
+/** Intervalles semi-ouverts [start, end) : finir à l'heure où l'autre commence n'est pas un chevauchement. */
+export function overlaps(a: Slot, b: Slot): boolean {
+  return a.start < b.end && b.start < a.end;
+}
